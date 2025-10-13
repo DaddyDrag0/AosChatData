@@ -1,89 +1,109 @@
 <!doctype html>
-</label>
-<button class="btn primary" type="submit">Enter</button>
-<div class="row small">
-<a id="linkRecover" href="#">Forgot password?</a>
-</div>
-<div id="loginMsg" class="msg" aria-live="polite"></div>
-</form>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project — Private Wiki + Chat</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <!-- AUTH SCREEN (shown when no session) -->
+  <main id="auth" class="center">
+    <section class="card auth">
+      <h1>Welcome</h1>
+      <p class="muted">Log in to access the Wiki & Chat.</p>
 
+      <div class="tabs" role="tablist">
+        <button id="tabLogin" role="tab" aria-selected="true">Log in</button>
+        <button id="tabSignup" role="tab" aria-selected="false">Sign up</button>
+      </div>
 
-<form id="signupForm" class="form hide" autocomplete="off">
-<label>Username
-<input id="signupUsername" type="text" inputmode="latin" placeholder="your_name" required>
-</label>
-<label>Password
-<input id="signupPassword" type="password" placeholder="min 6 characters" required>
-</label>
-<label>Confirm password
-<input id="signupConfirm" type="password" required>
-</label>
-<button class="btn primary" type="submit">Create account</button>
-<p class="hint">You’ll get a one‑time recovery code — save it somewhere safe.</p>
-<div id="signupMsg" class="msg" aria-live="polite"></div>
-</form>
+      <!-- Log in -->
+      <form id="loginForm" class="form" autocomplete="on">
+        <label>Username
+          <input id="loginUsername" type="text" inputmode="latin" autocomplete="username" required>
+        </label>
+        <label>Password
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn primary" type="submit">Enter</button>
+        <div class="row small">
+          <a id="linkRecover" href="#">Forgot password?</a>
+        </div>
+        <div id="loginMsg" class="msg" aria-live="polite"></div>
+      </form>
 
+      <!-- Sign up -->
+      <form id="signupForm" class="form hide" autocomplete="off">
+        <label>Username
+          <input id="signupUsername" type="text" inputmode="latin" placeholder="your_name" required>
+        </label>
+        <label>Password
+          <input id="signupPassword" type="password" placeholder="min 6 characters" required>
+        </label>
+        <label>Confirm password
+          <input id="signupConfirm" type="password" required>
+        </label>
+        <button class="btn primary" type="submit">Create account</button>
+        <p class="hint">You’ll get a one-time recovery code — save it somewhere safe.</p>
+        <div id="signupMsg" class="msg" aria-live="polite"></div>
+      </form>
 
-<!-- Recovery flow -->
-<form id="recoverForm" class="form hide" autocomplete="off">
-<label>Username
-<input id="recoverUsername" type="text" required>
-</label>
-<label>Recovery code
-<input id="recoverCode" type="text" placeholder="paste your code" required>
-</label>
-<label>New password
-<input id="recoverNewPass" type="password" required>
-</label>
-<button class="btn primary" type="submit">Reset password</button>
-<div class="row small"><a id="linkBackToLogin" href="#">Back to login</a></div>
-<div id="recoverMsg" class="msg" aria-live="polite"></div>
-</form>
+      <!-- Recovery flow -->
+      <form id="recoverForm" class="form hide" autocomplete="off">
+        <label>Username
+          <input id="recoverUsername" type="text" required>
+        </label>
+        <label>Recovery code
+          <input id="recoverCode" type="text" placeholder="paste your code" required>
+        </label>
+        <label>New password
+          <input id="recoverNewPass" type="password" required>
+        </label>
+        <button class="btn primary" type="submit">Reset password</button>
+        <div class="row small"><a id="linkBackToLogin" href="#">Back to login</a></div>
+        <div id="recoverMsg" class="msg" aria-live="polite"></div>
+      </form>
 
+      <!-- Shown after successful signup -->
+      <div id="recoveryBox" class="recovery hide" role="alert">
+        <h2>Save your recovery code</h2>
+        <p class="muted">This code can reset your password without email. Keep it private.</p>
+        <pre id="recoveryCode" class="code"></pre>
+        <div class="row">
+          <button id="copyCode" class="btn">Copy</button>
+          <button id="downloadCode" class="btn">Download .txt</button>
+          <button id="continueToLogin" class="btn primary">I saved it</button>
+        </div>
+      </div>
 
-<!-- Shown after successful signup -->
-<div id="recoveryBox" class="recovery hide" role="alert">
-<h2>Save your recovery code</h2>
-<p class="muted">This code can reset your password without email. Keep it private.</p>
-<pre id="recoveryCode" class="code"></pre>
-<div class="row">
-<button id="copyCode" class="btn">Copy</button>
-<button id="downloadCode" class="btn">Download .txt</button>
-<button id="continueToLogin" class="btn primary">I saved it</button>
-</div>
-</div>
+    </section>
+  </main>
 
+  <!-- APP SHELL (shown when logged in) -->
+  <div id="app" class="layout hide" aria-hidden="true">
+    <aside class="sidebar">
+      <div class="brand">◆ Project</div>
+      <nav class="nav">
+        <button class="nav-item active" data-page="wiki">Wiki</button>
+        <button class="nav-item" data-page="chat">Chat</button>
+        <button class="nav-item" data-page="profile">Profile</button>
+        <button class="nav-item" data-page="settings">Settings</button>
+      </nav>
+    </aside>
 
-</section>
-</main>
+    <main class="main">
+      <header class="topbar">
+        <input id="globalSearch" class="search" placeholder="Search…" aria-label="Search">
+        <div class="spacer"></div>
+        <button id="btnLogout" class="btn small">Log out</button>
+      </header>
+      <section id="page" class="content" tabindex="-1">
+        <!-- populated by script.js -->
+      </section>
+    </main>
+  </div>
 
-
-<!-- APP SHELL (shown when logged in) -->
-<div id="app" class="layout hide" aria-hidden="true">
-<aside class="sidebar">
-<div class="brand">◆ Project</div>
-<nav class="nav">
-<button class="nav-item active" data-page="wiki">Wiki</button>
-<button class="nav-item" data-page="chat">Chat</button>
-<button class="nav-item" data-page="profile">Profile</button>
-<button class="nav-item" data-page="settings">Settings</button>
-</nav>
-</aside>
-
-
-<main class="main">
-<header class="topbar">
-<input id="globalSearch" class="search" placeholder="Search…" aria-label="Search">
-<div class="spacer"></div>
-<button id="btnLogout" class="btn small">Log out</button>
-</header>
-<section id="page" class="content" tabindex="-1">
-<!-- populated by script.js -->
-</section>
-</main>
-</div>
-
-
-<script src="script.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>
