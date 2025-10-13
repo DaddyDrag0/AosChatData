@@ -1,1 +1,36 @@
-
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign in — Project</title>
+<link rel="stylesheet" href="/styles/base.css" />
+</head>
+<body>
+<main class="center">
+<section class="card auth">
+<h1>Welcome</h1>
+<p class="muted">Log in to access the Wiki & Chat.</p>
+<div class="tabs" role="tablist">
+<button role="tab" aria-selected="true">Log in</button>
+<button role="tab">Sign up</button>
+</div>
+<form class="form" id="login">
+<label>Username<input type="text" autocomplete="username" required></label>
+<label>Password<input type="password" autocomplete="current-password" required></label>
+<button class="btn primary" type="submit">Enter</button>
+<div class="row small">
+<a href="#" id="recover">Forgot password?</a>
+</div>
+</form>
+<form class="form hide" id="signup">
+<label>Username<input type="text" autocomplete="username" required></label>
+<label>Password<input type="password" autocomplete="new-password" required></label>
+<label>Confirm<input type="password" autocomplete="new-password" required></label>
+<button class="btn primary" type="submit">Create account</button>
+<p class="hint">You’ll get a recovery code — save it somewhere safe.</p>
+</form>
+</section>
+</main>
+</body>
+</html>
