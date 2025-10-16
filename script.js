@@ -20,7 +20,7 @@ try {
 
 // Late bootstrap helper (runs when UMD and config appear)
 function bootstrapSupabase() {
-  if (!supabase && window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+  if (!supabase && window.supabase) {
     try {
       const url = SUPABASE_URL || window.SUPABASE_URL;
       const key = SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY;
@@ -133,6 +133,46 @@ if (!supabase) {
   }
 }
 
+// Simple diagnostics to help verify bindings and library state (dev aid)
+const __diag = {
+  lib: () => !!window.supabase,
+  client: () => !!supabase,
+  url: () => !!(SUPABASE_URL || window.SUPABASE_URL),
+  key: () => !!(SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY),
+  boundLogin: false,
+  boundSignup: false,
+  last: "idle",
+};
+function updateDiag() {
+  const box = document.getElementById("authDiag");
+  if (!box) return;
+  box.textContent = `Lib:${__diag.lib()} Client:${__diag.client()} URL:${__diag.url()} Key:${__diag.key()} LoginBound:${__diag.boundLogin} SignupBound:${__diag.boundSignup} Last:${__diag.last}`;
+}
+setTimeout(updateDiag, 0);
+
+// Force-show app layout and optional target page
+function showApp(target = "overview") {
+  try {
+    // Hide auth overlay (belt + suspenders)
+    if (authOverlay) { authOverlay.hidden = true; authOverlay.style.display = "none"; }
+    // Show wiki layout
+    if (wikiLayout) { wikiLayout.hidden = false; wikiLayout.style.display = "block"; }
+    // Navigate
+    const link = document.querySelector(`a[data-page="${target}"]`);
+    if (link) {
+      $$("#nav a").forEach((x) => x.classList.remove("active"));
+      link.classList.add("active");
+      $$("#page > div").forEach((div) => (div.hidden = div.id !== target));
+      history.replaceState(null, "", `#${target}`);
+    }
+    __diag.last = `ui:shown:${target}`; updateDiag();
+    // Remove focus ring from button
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  } catch (e) {
+    console.error("UI: showApp failed", e);
+  }
+}
+
 // Tabs
 function setTab(which) {
   if (which === "login") {
@@ -149,11 +189,13 @@ function setTab(which) {
     signupUsername?.focus();
   }
 }
-tabLogin?.addEventListener("click", () => setTab("login"));
-tabSignup?.addEventListener("click", () => setTab("signup"));
+tabLogin?.addEventListener("click", () => { __diag.last = "tab:login"; updateDiag(); setTab("login"); });
+tabSignup?.addEventListener("click", () => { __diag.last = "tab:signup"; updateDiag(); setTab("signup"); });
 
 // Login
+if (loginSubmit) __diag.boundLogin = true; updateDiag();
 loginSubmit?.addEventListener("click", async () => {
+  __diag.last = "login:click"; updateDiag();
   if (!supabase) {
     return showAuthError("App is still loading Supabase. Try a hard refresh (Ctrl+F5).");
   }
@@ -164,34 +206,45 @@ loginSubmit?.addEventListener("click", async () => {
   if (RESERVED_NAMES.has(username)) return showAuthError("This username is reserved");
   const email = `${username}@app.local`;
   console.debug("Auth: signInWithPassword", { email });
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  __diag.last = "login:calling"; updateDiag();
+  let data, error;
+  try {
+    ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
+  } catch (e) {
+    console.error("Auth: sign-in exception", e);
+    __diag.last = "login:exception"; updateDiag();
+    return showAuthError("Network error signing in. Check your connection.");
+  }
+  console.log("Auth: sign-in result", { data, error });
   if (error) {
     console.warn("Auth: sign-in error", error);
+    __diag.last = `login:error:${error.status || error.name || ""}`; updateDiag();
     return showAuthError(error.message);
   }
   // Use returned session immediately if present
   if (data?.session?.user) {
+    __diag.last = "login:session:true"; updateDiag();
     currentUser = data.session.user.user_metadata.username || data.session.user.email.split("@")[0];
     currentUserEl.textContent = currentUser;
-    authOverlay.hidden = true;
-    wikiLayout.hidden = false;
-    // Jump to Overview
-    const overviewLink = document.querySelector('a[data-page="overview"]');
-    if (overviewLink) {
-      $$("#nav a").forEach((x) => x.classList.remove("active"));
-      overviewLink.classList.add("active");
-      $$("#page > div").forEach((div) => (div.hidden = div.id !== "overview"));
-      history.replaceState(null, "", "#overview");
-    }
+    showApp("overview");
     render();
   } else {
     // Fallback to session check
-    await initWiki();
+    const { data: s } = await supabase.auth.getSession();
+    if (s?.session?.user) {
+      __diag.last = "login:session:true(late)"; updateDiag();
+      await initWiki();
+    } else {
+      __diag.last = "login:session:false"; updateDiag();
+      showAuthError("Login did not return a session. If email confirmations are enabled, confirm your email or disable confirmations in Supabase Auth settings.");
+    }
   }
 });
 
 // Signup
+if (signupSubmit) __diag.boundSignup = true; updateDiag();
 signupSubmit?.addEventListener("click", async () => {
+  __diag.last = "signup:click"; updateDiag();
   if (!supabase) {
     return showAuthError("App is still loading Supabase. Try a hard refresh (Ctrl+F5).");
   }
@@ -235,17 +288,7 @@ signupSubmit?.addEventListener("click", async () => {
 
     currentUser = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : username);
     currentUserEl.textContent = currentUser;
-    authOverlay.hidden = true;
-    wikiLayout.hidden = false;
-
-    // Navigate to Profile so the transition is obvious
-    const profileLink = document.querySelector('a[data-page="profile"]');
-    if (profileLink) {
-      $$("#nav a").forEach((x) => x.classList.remove("active"));
-      profileLink.classList.add("active");
-      $$("#page > div").forEach((div) => (div.hidden = div.id !== "profile"));
-      history.replaceState(null, "", "#profile");
-    }
+    showApp("profile");
     render();
   } else {
     // No session returned (likely email confirmations enabled). Ask user to log in.
@@ -275,16 +318,8 @@ async function initWiki() {
   if (!session) return;
   currentUser = session.user.user_metadata.username || session.user.email.split("@")[0];
   currentUserEl.textContent = currentUser;
-  authOverlay.hidden = true;
-  wikiLayout.hidden = false;
   // Ensure Overview is visible by default
-  const overviewLink = document.querySelector('a[data-page="overview"]');
-  if (overviewLink) {
-    $$("#nav a").forEach((x) => x.classList.remove("active"));
-    overviewLink.classList.add("active");
-    $$("#page > div").forEach((div) => (div.hidden = div.id !== "overview"));
-    history.replaceState(null, "", "#overview");
-  }
+  showApp("overview");
   render();
 }
 
