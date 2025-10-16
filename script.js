@@ -1,15 +1,66 @@
+// Supabase project config (embedded)
+const SUPABASE_URL = "https://lzrxjzrrkgxaaibwrgyj.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6cnhqenJya2d4YWFpYndyZ3lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyMTUxNjgsImV4cCI6MjA3NTc5MTE2OH0.fsbv3MHQ2K3wWIimCmnnIhL7cWjsYW1trFPT1Lhljv8";
+
 // Initialize Supabase (safe)
 let supabase;
 try {
-  if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-    supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  const url = SUPABASE_URL || window.SUPABASE_URL;
+  const key = SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY;
+  if (window.supabase && url && key) {
+    supabase = window.supabase.createClient(url, key);
     console.info("[App] Supabase client initialized");
   } else {
-    console.error("[App] Supabase not ready - missing UMD or config.js");
+    console.error("[App] Supabase not ready - missing UMD library");
     // Defer showing an error until DOM elements exist (below)
   }
 } catch (e) {
   console.error("[App] Supabase init failed", e);
+}
+
+// Late bootstrap helper (runs when UMD and config appear)
+function bootstrapSupabase() {
+  if (!supabase && window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+    try {
+      const url = SUPABASE_URL || window.SUPABASE_URL;
+      const key = SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY;
+      if (!(url && key)) return false;
+      supabase = window.supabase.createClient(url, key);
+      console.info("[App] Supabase client initialized (late)");
+      const el = document.getElementById("authError");
+      if (el && !el.hidden && /App not ready/i.test(el.textContent || "")) {
+        el.hidden = true;
+      }
+      // Attempt session restore once ready
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) initWiki(); else setTab("login");
+      });
+      return true;
+    } catch (e) {
+      console.error("[App] Late Supabase init failed", e);
+    }
+  }
+  return false;
+}
+
+// If UMD is missing, try loading from an alternate CDN automatically
+if (!window.supabase) {
+  const alt = document.createElement("script");
+  alt.src = "https://unpkg.com/@supabase/supabase-js@2.45.3/dist/umd/supabase.min.js";
+  alt.async = true;
+  alt.onload = () => { bootstrapSupabase(); };
+  alt.onerror = () => { console.error("[App] Failed to load Supabase from alternate CDN"); };
+  document.head.appendChild(alt);
+}
+
+// Retry bootstrap a few times in case scripts/config arrive late
+if (!supabase) {
+  let tries = 0;
+  const maxTries = 12; // ~6s total
+  const timer = setInterval(() => {
+    tries += 1;
+    if (bootstrapSupabase() || tries >= maxTries) clearInterval(timer);
+  }, 500);
 }
 
 const RESERVED_NAMES = new Set(["admin","root","support","system","null","undefined","me","you","owner","moderator","mod","help","test","operator"]);
@@ -78,7 +129,7 @@ if (!supabase) {
   const el = document.getElementById("authError");
   if (el) {
     el.hidden = false;
-    el.textContent = "App not ready: Supabase script or config is missing. Check your internet and that config.js is loaded.";
+    el.textContent = "App not ready: Supabase library not loaded yet. Check your internet.";
   }
 }
 
