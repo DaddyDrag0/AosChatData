@@ -1,119 +1,289 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Project — Private Wiki + Chat</title>
-  <link rel="stylesheet" href="./styles.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game Wiki — F1 Hub</title>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <!-- AUTH SCREEN -->
-  <main id="auth" class="center">
-    <section class="card auth">
-      <h1>Welcome</h1>
-      <p class="muted">Create an account to access the Wiki & Chat.</p>
 
-      <div class="tabs" role="tablist">
-        <button id="tabLogin" role="tab" aria-selected="true">Log in</button>
-        <button id="tabSignup" role="tab" aria-selected="false">Sign up</button>
+<!-- AUTH OVERLAY -->
+<div id="authOverlay" class="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-dot"></div>
+      <span>Epic Game Wiki</span>
+    </div>
+    <div class="auth-tabs">
+      <button id="tabLogin" class="auth-tab active" type="button">Log In</button>
+      <button id="tabSignup" class="auth-tab" type="button">Create Account</button>
+    </div>
+
+    <div id="authPanels">
+      <!-- Login Panel -->
+      <div id="loginPanel" class="auth-panel active">
+        <h2>Welcome Back</h2>
+        <p class="auth-subtitle">Sign in to access the wiki</p>
+        <input id="loginUsername" type="text" placeholder="Username" autocomplete="username" />
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        <label class="auth-checkbox">
+          <input id="rememberMe" type="checkbox" checked />
+          <span>Remember me</span>
+        </label>
+        <button id="loginSubmit" class="auth-btn" type="button">Log In</button>
       </div>
 
-      <!-- Log in -->
-      <form id="loginForm" class="form" autocomplete="on" novalidate>
-        <label>Username
-          <input id="loginUsername" type="text" inputmode="latin" autocomplete="username" required>
-        </label>
-        <label>Password
-          <div class="input-with-action">
-            <input id="loginPassword" type="password" autocomplete="current-password" required>
-            <button type="button" class="icon-btn" id="loginTogglePass" aria-label="Show password">👁</button>
-          </div>
-        </label>
-        <button class="btn primary" type="submit">Enter</button>
-        <div class="row small">
-          <a id="linkRecover" href="#">Forgot password?</a>
-        </div>
-        <div id="loginMsg" class="msg" aria-live="polite"></div>
-      </form>
-
-      <!-- Sign up -->
-      <form id="signupForm" class="form hide" autocomplete="off" novalidate>
-        <label>Username
-          <input id="signupUsername" type="text" inputmode="latin" placeholder="your_name" required>
-          <small class="hint">3–20 chars: a–z, 0–9, _</small>
-        </label>
-
-        <label>Password
-          <div class="input-with-action">
-            <input id="signupPassword" type="password" placeholder="min 8 characters" required>
-            <button type="button" class="icon-btn" id="signupTogglePass" aria-label="Show password">👁</button>
-          </div>
-          <div class="strength" id="strength">
-            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
-          </div>
-        </label>
-
-        <label>Confirm password
-          <input id="signupConfirm" type="password" required>
-        </label>
-
-        <button class="btn primary" type="submit">Create account</button>
-        <div id="signupMsg" class="msg" aria-live="polite"></div>
-      </form>
-
-      <!-- Recovery flow -->
-      <form id="recoverForm" class="form hide" autocomplete="off" novalidate>
-        <label>Username
-          <input id="recoverUsername" type="text" required>
-        </label>
-        <label>Recovery code
-          <input id="recoverCode" type="text" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" required>
-        </label>
-        <label>New password
-          <input id="recoverNewPass" type="password" required>
-        </label>
-        <button class="btn primary" type="submit">Reset password</button>
-        <div class="row small"><a id="linkBackToLogin" href="#">Back to login</a></div>
-        <div id="recoverMsg" class="msg" aria-live="polite"></div>
-      </form>
-
-      <!-- One-time recovery code -->
-      <div id="recoveryBox" class="recovery hide" role="alert">
-        <h2>Save your recovery code</h2>
-        <p class="muted">This code can reset your password without email. Keep it private.</p>
-        <pre id="recoveryCode" class="code"></pre>
-        <div class="row">
-          <button id="copyCode" class="btn">Copy</button>
-          <button id="downloadCode" class="btn">Download .txt</button>
-          <button id="continueToLogin" class="btn primary">I saved it</button>
-        </div>
+      <!-- Signup Panel -->
+      <div id="signupPanel" class="auth-panel">
+        <h2>Create Account</h2>
+        <p class="auth-subtitle">Pick a username and password</p>
+        <input id="signupUsername" type="text" placeholder="Username" autocomplete="username" />
+        <input id="signupPassword" type="password" placeholder="Password (min 6)" autocomplete="new-password" />
+        <input id="signupConfirm" type="password" placeholder="Confirm password" autocomplete="new-password" />
+        <button id="signupSubmit" class="auth-btn" type="button">Create Account</button>
       </div>
-    </section>
-  </main>
+    </div>
 
-  <!-- APP SHELL -->
-  <div id="app" class="layout hide" aria-hidden="true">
-    <aside class="sidebar">
-      <div class="brand">◆ Project</div>
-      <nav class="nav">
-        <button class="nav-item active" data-page="wiki">Wiki</button>
-        <button class="nav-item" data-page="chat">Chat</button>
-        <button class="nav-item" data-page="profile">Profile</button>
-        <button class="nav-item" data-page="settings">Settings</button>
-      </nav>
-    </aside>
+    <div id="authError" class="auth-error" hidden></div>
+  </div>
+</div>
 
-    <main class="main">
-      <header class="topbar">
-        <input id="globalSearch" class="search" placeholder="Search…" aria-label="Search">
-        <div class="spacer"></div>
-        <button id="btnLogout" class="btn small">Log out</button>
-      </header>
-      <section id="page" class="content" tabindex="-1"></section>
-    </main>
+<!-- WIKI -->
+<div id="wikiLayout" class="layout" hidden>
+  <div class="profile-bar">
+    <span id="currentUser" class="profile-user"></span>
+    <button id="logoutBtn" class="btn ghost">Log Out</button>
   </div>
 
-  <div id="toast" class="toast" aria-live="polite"></div>
-  <script src="./script.js"></script>
+  <aside>
+    <div class="logo"><span class="dot"></span> Epic Game Wiki</div>
+    <div class="search">
+      <input id="q" placeholder="Search items + armor..." />
+    </div>
+
+    <div class="section-title">Main Pages</div>
+    <nav class="nav" id="nav">
+      <a href="#overview" data-page="overview" class="active">📊 Overview</a>
+      <a href="#all" data-page="all">🧰 All Items</a>
+      <a href="#items" data-page="items">⚔️ Items</a>
+      <a href="#armor" data-page="armor">🛡️ Armor</a>
+      <a href="#enemies" data-page="enemies">👾 Enemies</a>
+      <a href="#favorites" data-page="favorites">⭐ Favorites</a>
+    </nav>
+
+    <div class="section-title">Social</div>
+    <nav class="nav">
+      <a href="#friends" data-page="friends">👥 Friends</a>
+      <a href="#messages" data-page="messages">💬 Messages</a>
+      <a href="#profile" data-page="profile">👤 Profile</a>
+    </nav>
+  </aside>
+
+  <main>
+    <article id="page" class="page">
+      <div id="overview">
+        <h1>Welcome (Floor 1)</h1>
+        <p class="small">Click a card for details. ⭐ to favorite.</p>
+      </div>
+
+      <div id="all" class="section" hidden>
+        <h1>All Items</h1>
+        <div class="controls">
+          <label class="small">Type</label>
+          <select class="all-type" data-for="all">
+            <option value="all">All</option>
+            <option value="item">Items</option>
+            <option value="armor">Armor</option>
+          </select>
+          <label class="small">Floor</label>
+          <select class="floor" data-for="all">
+            <option value="all" selected>All</option>
+            <option value="F1">F1</option>
+          </select>
+          <label class="small">Rarity</label>
+          <select class="rarity" data-for="all">
+            <option value="all" selected>All</option>
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="epic">Epic</option>
+            <option value="legendary">Legendary</option>
+          </select>
+          <label class="small">Slot (armor)</label>
+          <select class="slot" data-for="all">
+            <option value="all" selected>All</option>
+            <option value="Helmet">Helmet</option>
+            <option value="Chest">Chest</option>
+            <option value="Legs">Legs</option>
+            <option value="Boots">Boots</option>
+          </select>
+          <button class="btn ghost" id="resetAll">Reset</button>
+          <div class="spacer"></div>
+          <span class="small" id="allCount"></span>
+          <div class="badges">
+            <button class="btn view" data-for="all" data-view="grid" aria-pressed="true">Grid</button>
+            <button class="btn view" data-for="all" data-view="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+        <hr/>
+        <div id="allGrid" class="grid"></div>
+        <div id="allEmpty" class="empty" hidden>Nothing found.</div>
+      </div>
+
+      <div id="items" class="section" hidden>
+        <h1>Items</h1>
+        <div class="controls">
+          <label class="small">Floor</label>
+          <select class="floor" data-for="items">
+            <option value="all" selected>All</option>
+            <option value="F1">F1</option>
+          </select>
+          <label class="small">Rarity</label>
+          <select class="rarity" data-for="items">
+            <option value="all" selected>All</option>
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="epic">Epic</option>
+            <option value="legendary">Legendary</option>
+          </select>
+          <div class="spacer"></div>
+          <div class="badges">
+            <button class="btn view" data-for="items" data-view="grid" aria-pressed="true">Grid</button>
+            <button class="btn view" data-for="items" data-view="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+        <hr/>
+        <div id="itemsGrid" class="grid"></div>
+        <div id="itemsEmpty" class="empty" hidden>No items match.</div>
+      </div>
+
+      <div id="armor" class="section" hidden>
+        <h1>Armor</h1>
+        <div class="controls">
+          <label class="small">Floor</label>
+          <select class="floor" data-for="armor">
+            <option value="all" selected>All</option>
+            <option value="F1">F1</option>
+          </select>
+          <label class="small">Slot</label>
+          <select class="slot" data-for="armor">
+            <option value="all" selected>All</option>
+            <option value="Helmet">Helmet</option>
+            <option value="Chest">Chest</option>
+            <option value="Legs">Legs</option>
+            <option value="Boots">Boots</option>
+          </select>
+          <label class="small">Rarity</label>
+          <select class="rarity" data-for="armor">
+            <option value="all" selected>All</option>
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="epic">Epic</option>
+            <option value="legendary">Legendary</option>
+          </select>
+          <div class="spacer"></div>
+          <div class="badges">
+            <button class="btn view" data-for="armor" data-view="grid" aria-pressed="true">Grid</button>
+            <button class="btn view" data-for="armor" data-view="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+        <hr/>
+        <div id="armorGrid" class="grid"></div>
+        <div id="armorEmpty" class="empty" hidden>No armor found.</div>
+      </div>
+
+      <div id="enemies" class="section" hidden>
+        <h1>Enemies (F1)</h1>
+        <div class="controls">
+          <label class="small">Type</label>
+          <select class="type" data-for="enemies">
+            <option value="all" selected>All</option>
+            <option value="mob">Mob</option>
+            <option value="elite">Elite</option>
+            <option value="boss">Boss</option>
+          </select>
+          <div class="spacer"></div>
+          <div class="badges">
+            <button class="btn view" data-for="enemies" data-view="grid" aria-pressed="true">Grid</button>
+            <button class="btn view" data-for="enemies" data-view="list" aria-pressed="false">List</button>
+          </div>
+        </div>
+        <hr/>
+        <div id="enemyGrid" class="grid"></div>
+        <div id="enemyEmpty" class="empty" hidden>No enemies match.</div>
+      </div>
+
+      <div id="favorites" class="section" hidden>
+        <h1>Favorites</h1>
+        <div class="small">Synced with Supabase.</div>
+        <hr/>
+        <div id="favGrid" class="grid"></div>
+        <div id="favEmpty" class="empty" hidden>No favorites yet. Click ⭐ on any card.</div>
+      </div>
+
+      <div id="friends" class="section" hidden>
+        <h1>Friends</h1>
+        <div class="panel">
+          <h3 style="margin:0 0 8px">Add Friend</h3>
+          <div class="controls" style="margin:0 0 12px">
+            <input id="friendName" placeholder="Username..." />
+            <button class="btn" id="addFriendBtn">Send Request</button>
+          </div>
+          <h3 style="margin:12px 0 8px">Incoming Requests</h3>
+          <div id="incoming"></div>
+          <h3 style="margin:12px 0 8px">Outgoing Requests</h3>
+          <div id="outgoing"></div>
+          <h3 style="margin:12px 0 8px">My Friends</h3>
+          <div id="friendsList"></div>
+          <div id="friendsEmpty" class="empty" hidden>No friends yet.</div>
+        </div>
+      </div>
+
+      <div id="messages" class="section" hidden>
+        <h1>Messages</h1>
+        <div class="panel">
+          <h3 style="margin:0 0 8px">Chat</h3>
+          <div class="chat">
+            <div id="chatWith">No conversation selected</div>
+            <div id="chatLog" class="chat-log"></div>
+            <div class="chat-input">
+              <input id="chatText" placeholder="Type a message..." />
+              <button class="btn" id="chatSend">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="profile" class="section" hidden>
+        <h1>Profile</h1>
+        <div class="panel">
+          <h3 style="margin:0 0 8px">Your Profile</h3>
+          <div class="controls" style="margin:0">
+            <input id="profileDisplayName" placeholder="Display Name" />
+            <input id="profileBio" placeholder="Bio" />
+            <button class="btn" id="updateProfileBtn">Update Profile</button>
+          </div>
+        </div>
+      </div>
+    </article>
+  </main>
+</div>
+
+<!-- Detail Sheet -->
+<div id="sheetBackdrop" class="sheet-backdrop" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <button class="btn close" id="sheetClose">Close</button>
+    <div class="bar" id="sheetTitle">Details</div>
+    <div class="hero" id="sheetHero"></div>
+    <div class="body" id="sheetBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.3/dist/umd/supabase.min.js"></script>
+<script src="./config.js"></script>
+<script src="./script.js"></script>
 </body>
 </html>
