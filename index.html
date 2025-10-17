@@ -196,13 +196,18 @@
       </div>
 
       <div id="enemies" class="section" hidden>
-        <h1>Enemies (F1)</h1>
+        <h1>Enemies</h1>
         <div class="controls">
+          <label class="small">Floor</label>
+          <select class="floor" data-for="enemies">
+            <option value="all" selected>All</option>
+            <option value="F1">F1</option>
+          </select>
           <label class="small">Type</label>
           <select class="type" data-for="enemies">
             <option value="all" selected>All</option>
             <option value="mob">Mob</option>
-            <option value="elite">Elite</option>
+            <option value="mini-boss">Mini-Boss</option>
             <option value="boss">Boss</option>
           </select>
           <div class="spacer"></div>
@@ -283,7 +288,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.3/dist/umd/supabase.min.js"></script>
-<script src="./config.js"></script>
 <script src="./script.js"></script>
 </body>
 </html>
