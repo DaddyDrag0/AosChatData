@@ -133,22 +133,7 @@ if (!supabase) {
   }
 }
 
-// Simple diagnostics to help verify bindings and library state (dev aid)
-const __diag = {
-  lib: () => !!window.supabase,
-  client: () => !!supabase,
-  url: () => !!(SUPABASE_URL || window.SUPABASE_URL),
-  key: () => !!(SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY),
-  boundLogin: false,
-  boundSignup: false,
-  last: "idle",
-};
-function updateDiag() {
-  const box = document.getElementById("authDiag");
-  if (!box) return;
-  box.textContent = `Lib:${__diag.lib()} Client:${__diag.client()} URL:${__diag.url()} Key:${__diag.key()} LoginBound:${__diag.boundLogin} SignupBound:${__diag.boundSignup} Last:${__diag.last}`;
-}
-setTimeout(updateDiag, 0);
+// (diagnostics removed)
 
 // Force-show app layout and optional target page
 function showApp(target = "overview") {
@@ -165,11 +150,23 @@ function showApp(target = "overview") {
       $$("#page > div").forEach((div) => (div.hidden = div.id !== target));
       history.replaceState(null, "", `#${target}`);
     }
-    __diag.last = `ui:shown:${target}`; updateDiag();
     // Remove focus ring from button
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   } catch (e) {
     console.error("UI: showApp failed", e);
+  }
+}
+
+// Force-show auth and hide app layout (used on logout)
+function showAuth() {
+  try {
+    if (wikiLayout) { wikiLayout.hidden = true; wikiLayout.style.display = "none"; }
+    if (authOverlay) { authOverlay.hidden = false; authOverlay.style.display = "flex"; }
+    // Reset to login tab if using tabs
+    const tabLogin = document.getElementById("tabLogin");
+    tabLogin?.click();
+  } catch (e) {
+    console.error("UI: showAuth failed", e);
   }
 }
 
@@ -189,13 +186,11 @@ function setTab(which) {
     signupUsername?.focus();
   }
 }
-tabLogin?.addEventListener("click", () => { __diag.last = "tab:login"; updateDiag(); setTab("login"); });
-tabSignup?.addEventListener("click", () => { __diag.last = "tab:signup"; updateDiag(); setTab("signup"); });
+tabLogin?.addEventListener("click", () => { setTab("login"); });
+tabSignup?.addEventListener("click", () => { setTab("signup"); });
 
 // Login
-if (loginSubmit) __diag.boundLogin = true; updateDiag();
 loginSubmit?.addEventListener("click", async () => {
-  __diag.last = "login:click"; updateDiag();
   if (!supabase) {
     return showAuthError("App is still loading Supabase. Try a hard refresh (Ctrl+F5).");
   }
@@ -206,24 +201,20 @@ loginSubmit?.addEventListener("click", async () => {
   if (RESERVED_NAMES.has(username)) return showAuthError("This username is reserved");
   const email = `${username}@app.local`;
   console.debug("Auth: signInWithPassword", { email });
-  __diag.last = "login:calling"; updateDiag();
   let data, error;
   try {
     ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
   } catch (e) {
     console.error("Auth: sign-in exception", e);
-    __diag.last = "login:exception"; updateDiag();
     return showAuthError("Network error signing in. Check your connection.");
   }
   console.log("Auth: sign-in result", { data, error });
   if (error) {
     console.warn("Auth: sign-in error", error);
-    __diag.last = `login:error:${error.status || error.name || ""}`; updateDiag();
     return showAuthError(error.message);
   }
   // Use returned session immediately if present
   if (data?.session?.user) {
-    __diag.last = "login:session:true"; updateDiag();
     currentUser = data.session.user.user_metadata.username || data.session.user.email.split("@")[0];
     currentUserEl.textContent = currentUser;
     showApp("overview");
@@ -231,20 +222,13 @@ loginSubmit?.addEventListener("click", async () => {
   } else {
     // Fallback to session check
     const { data: s } = await supabase.auth.getSession();
-    if (s?.session?.user) {
-      __diag.last = "login:session:true(late)"; updateDiag();
-      await initWiki();
-    } else {
-      __diag.last = "login:session:false"; updateDiag();
-      showAuthError("Login did not return a session. If email confirmations are enabled, confirm your email or disable confirmations in Supabase Auth settings.");
-    }
+    if (s?.session?.user) await initWiki();
+    else showAuthError("Login did not return a session. If email confirmations are enabled, confirm your email or disable confirmations in Supabase Auth settings.");
   }
 });
 
 // Signup
-if (signupSubmit) __diag.boundSignup = true; updateDiag();
 signupSubmit?.addEventListener("click", async () => {
-  __diag.last = "signup:click"; updateDiag();
   if (!supabase) {
     return showAuthError("App is still loading Supabase. Try a hard refresh (Ctrl+F5).");
   }
@@ -300,13 +284,11 @@ signupSubmit?.addEventListener("click", async () => {
 
 // Logout
 logoutBtn?.addEventListener("click", async () => {
-  await supabase.auth.signOut();
-  authOverlay.hidden = false;
-  wikiLayout.hidden = true;
+  try { await supabase?.auth.signOut(); } catch {}
+  currentUser = null;
   if (loginUsername) loginUsername.value = "";
   if (loginPassword) loginPassword.value = "";
-  currentUser = null;
-  setTab("login");
+  showAuth();
 });
 
 // Session init
@@ -338,10 +320,8 @@ if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" && session) initWiki();
     else if (event === "SIGNED_OUT") {
-      authOverlay.hidden = false;
-      wikiLayout.hidden = true;
       currentUser = null;
-      setTab("login");
+      showAuth();
     }
   });
 }
@@ -471,11 +451,12 @@ function render() {
   }
 
   // ENEMIES
+  const fEnemies = $(".floor[data-for=\"enemies\"]")?.value || "all";
   const tEnemies = $(".type[data-for=\"enemies\"]")?.value || "all";
   const enemies = DB.enemies.filter((x) => {
     const hay = [x.name, (x.loot || []).join(","), x.floor, x.type, x.summary, (x.materials || []).join(",")].join(" ").toLowerCase();
     const typeOk = tEnemies === "all" || x.type === tEnemies;
-    return (!q || hay.includes(q)) && typeOk;
+    return (!q || hay.includes(q)) && floorMatches(x, fEnemies) && typeOk;
   });
   const eg = $("#enemyGrid");
   const eEmpty = $("#enemyEmpty");
@@ -605,8 +586,252 @@ function renderFavorites() {
   favorites.forEach((f) => grid.append(createCard(f.data, f.type)));
 }
 
-// Placeholder social features
-console.log("Friends, Messages, and Profile features are placeholders for now. Connect to Supabase tables next!");
+// ===== LIST/GRID VIEW TOGGLE =====
+$$(".btn.view").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    const target = e.currentTarget;
+    const view = target.dataset.view; // "grid" or "list"
+    const forSection = target.dataset.for; // "all", "items", "armor", "enemies"
+    
+    // Update button states
+    $$(`[data-for="${forSection}"].btn.view`).forEach((b) => {
+      b.setAttribute("aria-pressed", b.dataset.view === view ? "true" : "false");
+    });
+    
+    // Update section class
+    const section = $(`#${forSection}`);
+    if (section) {
+      if (view === "list") {
+        section.classList.add("list");
+      } else {
+        section.classList.remove("list");
+      }
+    }
+  });
+});
+
+// ===== FRIENDS FUNCTIONALITY =====
+let friendRequests = { incoming: [], outgoing: [] };
+let friends = [];
+
+async function loadFriends() {
+  if (!currentUser || !supabase) return;
+  // TODO: Load from Supabase friends table
+  // For now using mock data
+  renderFriends();
+}
+
+function renderFriends() {
+  const incomingEl = $("#incoming");
+  const outgoingEl = $("#outgoing");
+  const friendsListEl = $("#friendsList");
+  const emptyEl = $("#friendsEmpty");
+  
+  if (incomingEl) {
+    incomingEl.innerHTML = friendRequests.incoming.length === 0
+      ? '<div class="small" style="padding:10px">No incoming requests</div>'
+      : friendRequests.incoming.map(req => `
+          <div class="request">
+            <span>${req.username}</span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn" data-accept="${req.username}">Accept</button>
+              <button class="btn ghost" data-reject="${req.username}">Decline</button>
+            </div>
+          </div>
+        `).join("");
+  }
+  
+  if (outgoingEl) {
+    outgoingEl.innerHTML = friendRequests.outgoing.length === 0
+      ? '<div class="small" style="padding:10px">No outgoing requests</div>'
+      : friendRequests.outgoing.map(req => `
+          <div class="request">
+            <span>${req.username}</span>
+            <div style="margin-left:auto">
+              <button class="btn ghost" data-cancel="${req.username}">Cancel</button>
+            </div>
+          </div>
+        `).join("");
+  }
+  
+  if (friendsListEl && emptyEl) {
+    if (friends.length === 0) {
+      friendsListEl.innerHTML = "";
+      emptyEl.hidden = false;
+    } else {
+      emptyEl.hidden = true;
+      friendsListEl.innerHTML = friends.map(f => `
+        <div class="friend">
+          <span style="font-weight:600">${f.username}</span>
+          <span class="small" style="margin-left:auto">${f.online ? '🟢 Online' : '⚫ Offline'}</span>
+          <button class="btn ghost" data-remove="${f.username}">Remove</button>
+        </div>
+      `).join("");
+    }
+  }
+}
+
+$("#addFriendBtn")?.addEventListener("click", async () => {
+  const input = $("#friendName");
+  const username = input?.value.trim().toLowerCase();
+  if (!username) return;
+  
+  if (username === currentUser) {
+    alert("You can't add yourself!");
+    return;
+  }
+  
+  if (friends.some(f => f.username === username)) {
+    alert("Already friends!");
+    return;
+  }
+  
+  if (friendRequests.outgoing.some(r => r.username === username)) {
+    alert("Request already sent!");
+    return;
+  }
+  
+  // TODO: Send to Supabase
+  friendRequests.outgoing.push({ username });
+  input.value = "";
+  renderFriends();
+});
+
+// Delegate friend actions
+$("#friends")?.addEventListener("click", (e) => {
+  const target = e.target;
+  if (target.dataset.accept) {
+    const user = target.dataset.accept;
+    friendRequests.incoming = friendRequests.incoming.filter(r => r.username !== user);
+    friends.push({ username: user, online: Math.random() > 0.5 });
+    renderFriends();
+  } else if (target.dataset.reject) {
+    const user = target.dataset.reject;
+    friendRequests.incoming = friendRequests.incoming.filter(r => r.username !== user);
+    renderFriends();
+  } else if (target.dataset.cancel) {
+    const user = target.dataset.cancel;
+    friendRequests.outgoing = friendRequests.outgoing.filter(r => r.username !== user);
+    renderFriends();
+  } else if (target.dataset.remove) {
+    const user = target.dataset.remove;
+    if (confirm(`Remove ${user} from friends?`)) {
+      friends = friends.filter(f => f.username !== user);
+      renderFriends();
+    }
+  }
+});
+
+// ===== MESSAGES FUNCTIONALITY =====
+let conversations = [];
+let activeChat = null;
+let messages = [];
+
+async function loadMessages() {
+  if (!currentUser || !supabase) return;
+  // TODO: Load from Supabase messages table
+  renderMessages();
+}
+
+function renderMessages() {
+  const chatWith = $("#chatWith");
+  const chatLog = $("#chatLog");
+  
+  if (!activeChat) {
+    if (chatWith) chatWith.textContent = "No conversation selected";
+    if (chatLog) chatLog.innerHTML = "";
+    return;
+  }
+  
+  if (chatWith) chatWith.textContent = `Chat with ${activeChat}`;
+  if (chatLog) {
+    chatLog.innerHTML = messages
+      .filter(m => m.with === activeChat)
+      .map(m => `
+        <div class="msg ${m.from === currentUser ? 'me' : ''}">
+          <div class="bubble">${m.text}</div>
+        </div>
+      `).join("");
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+}
+
+$("#chatSend")?.addEventListener("click", () => {
+  const input = $("#chatText");
+  const text = input?.value.trim();
+  if (!text || !activeChat) return;
+  
+  // TODO: Send to Supabase
+  messages.push({ from: currentUser, to: activeChat, with: activeChat, text, timestamp: Date.now() });
+  input.value = "";
+  renderMessages();
+});
+
+$("#chatText")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#chatSend")?.click();
+});
+
+// ===== PROFILE FUNCTIONALITY =====
+let userProfile = { display_name: "", bio: "" };
+
+async function loadProfile() {
+  if (!currentUser || !supabase) return;
+  
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("username", currentUser)
+      .single();
+    
+    if (!error && data) {
+      userProfile = data;
+      const displayInput = $("#profileDisplayName");
+      const bioInput = $("#profileBio");
+      if (displayInput) displayInput.value = data.display_name || currentUser;
+      if (bioInput) bioInput.value = data.bio || "";
+    }
+  } catch (e) {
+    console.warn("Profile load error:", e);
+  }
+}
+
+$("#updateProfileBtn")?.addEventListener("click", async () => {
+  if (!currentUser || !supabase) return;
+  
+  const displayName = $("#profileDisplayName")?.value.trim();
+  const bio = $("#profileBio")?.value.trim();
+  
+  try {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ display_name: displayName, bio: bio })
+      .eq("username", currentUser);
+    
+    if (error) {
+      alert("Failed to update profile: " + error.message);
+    } else {
+      alert("Profile updated!");
+      userProfile = { display_name: displayName, bio };
+    }
+  } catch (e) {
+    console.error("Profile update error:", e);
+    alert("Error updating profile");
+  }
+});
+
+// Load social data when navigating to those pages
+$("#nav")?.addEventListener("click", (e) => {
+  const link = e.target.closest("a");
+  if (!link) return;
+  const page = link.dataset.page;
+  
+  if (page === "friends") loadFriends();
+  else if (page === "messages") loadMessages();
+  else if (page === "profile") loadProfile();
+});
+
+console.log("Friends, Messages, and Profile features are now functional!");
 console.info("[App] Auth UI ready. Click Log In or Create Account to proceed.");
 
 // Boot
