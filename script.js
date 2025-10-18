@@ -81,11 +81,18 @@ async function loadUserRole() {
     
     if (data) {
       userRole = data;
+      console.log('✅ Admin role loaded:', currentUser, userRole);
     } else {
       userRole = null;
+      console.log('❌ No admin role found for:', currentUser);
+    }
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error loading admin role:', error);
     }
   } catch (e) {
     userRole = null;
+    console.error('Exception loading admin role:', e);
   }
 }
 
@@ -446,12 +453,26 @@ signupSubmit?.addEventListener("click", async () => {
 
 // Logout
 logoutBtn?.addEventListener("click", async () => {
-  try { await supabase?.auth.signOut(); } catch {}
+  // Sign out from Supabase first
+  await supabase.auth.signOut();
+  
+  // Clear all state
   currentUser = null;
-  userRole = null; // Clear admin role on logout
-  isWikiInitialized = false; // Reset init flag on logout
+  userRole = null;
+  isWikiInitialized = false;
+  mySubmissions = [];
+  pendingSubmissions = [];
+  
+  // Clear all form inputs
   if (loginUsername) loginUsername.value = "";
   if (loginPassword) loginPassword.value = "";
+  
+  // Clear contribute forms
+  clearContributeForm('item');
+  clearContributeForm('armor');
+  clearContributeForm('enemy');
+  
+  // Show auth screen
   showAuth();
   showToast('Logged out successfully', 'info');
 });
@@ -881,6 +902,9 @@ async function initWiki() {
   if (isAdmin()) {
     await loadPendingSubmissions();
   }
+  
+  // Always render the admin panel visibility (will hide if not admin)
+  renderPendingApprovals();
   
   // Initialize real-time features
   initRealtimePresence();
