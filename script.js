@@ -1220,7 +1220,7 @@ async function loadGroups() {
       .eq('username', currentUser);
     
     if (memberError) {
-      console.error('Failed to load group memberships:', error);
+      console.error('Failed to load group memberships:', memberError);
       return;
     }
     
