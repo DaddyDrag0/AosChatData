@@ -71,12 +71,13 @@ let userRole = null; // Will be loaded from admin_roles table
 
 async function loadUserRole() {
   if (!currentUser || !supabase) return;
+  const lookupUsername = (currentUser || "").toLowerCase();
   
   try {
     const { data, error } = await supabase
       .from('admin_roles')
       .select('role, permissions')
-      .eq('username', currentUser)
+      .eq('username', lookupUsername)
       .single();
     
     if (data) {
@@ -439,8 +440,9 @@ signupSubmit?.addEventListener("click", async () => {
       console.warn("Profile upsert exception:", e);
     }
 
-    currentUser = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : username);
-    currentUserEl.textContent = currentUser;
+  const rawSignupName = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : username);
+  currentUser = (rawSignupName || "").toLowerCase();
+  currentUserEl.textContent = rawSignupName || currentUser;
     showApp("profile");
     render();
   } else {
@@ -463,18 +465,29 @@ logoutBtn?.addEventListener("click", async () => {
   mySubmissions = [];
   pendingSubmissions = [];
   
+  // Clear localStorage to prevent auto-login
+  localStorage.clear();
+  sessionStorage.clear();
+  
   // Clear all form inputs
   if (loginUsername) loginUsername.value = "";
   if (loginPassword) loginPassword.value = "";
   
   // Clear contribute forms
-  clearContributeForm('item');
-  clearContributeForm('armor');
-  clearContributeForm('enemy');
+  try {
+    clearContributeForm('item');
+    clearContributeForm('armor');
+    clearContributeForm('enemy');
+  } catch (e) {
+    // Forms might not exist yet
+  }
   
   // Show auth screen
   showAuth();
   showToast('Logged out successfully', 'info');
+  
+  // Prevent immediate re-login by reloading after a short delay
+  setTimeout(() => location.reload(), 100);
 });
 
 // Theme toggle
@@ -871,8 +884,9 @@ async function initWiki() {
   if (!session) return;
   
   const previousUser = currentUser;
-  currentUser = session.user.user_metadata.username || session.user.email.split("@")[0];
-  currentUserEl.textContent = currentUser;
+  const rawUsername = session.user.user_metadata.username || session.user.email.split("@")[0] || "";
+  currentUser = rawUsername.toLowerCase();
+  currentUserEl.textContent = rawUsername;
   
   // Load user role from database (for admin permissions)
   await loadUserRole();
