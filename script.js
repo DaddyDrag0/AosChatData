@@ -3342,6 +3342,36 @@ function deleteBuild(id) {
 let mySubmissions = [];
 let pendingSubmissions = [];
 
+function mapContributionRow(row) {
+  return {
+    id: row.id,
+    type: row.contribution_type,
+    name: row.item_name,
+    rarity: row.rarity,
+    icon: row.icon,
+    source: row.source,
+    floor: row.floor,
+    summary: row.summary,
+    dps: row.dps,
+    levelReq: row.level_req,
+    droppedBy: row.dropped_by || [],
+    hp: row.hp,
+    defense: row.defense,
+    slot: row.slot,
+    enemyType: row.enemy_type,
+    loot: row.loot || [],
+    materials: row.materials || [],
+    exp: row.exp,
+    money: row.money,
+    submittedBy: row.username,
+    status: row.status,
+    submittedAt: row.created_at,
+    is_archived: row.is_archived || false,
+    archivedBy: row.archived_by || null,
+    archivedAt: row.archived_at || null
+  };
+}
+
 // Load user's own submissions from database
 async function loadMySubmissions() {
   if (!supabase || !currentUser) return;
@@ -3401,31 +3431,7 @@ async function loadPendingSubmissions() {
     
     if (error) throw error;
     
-    pendingSubmissions = (data || []).map(sub => ({
-      id: sub.id,
-      type: sub.contribution_type,
-      name: sub.item_name,
-      rarity: sub.rarity,
-      icon: sub.icon,
-      source: sub.source,
-      floor: sub.floor,
-      summary: sub.summary,
-      dps: sub.dps,
-      levelReq: sub.level_req,
-      droppedBy: sub.dropped_by || [],
-      hp: sub.hp,
-      defense: sub.defense,
-      slot: sub.slot,
-      enemyType: sub.enemy_type,
-      loot: sub.loot || [],
-      materials: sub.materials || [],
-      exp: sub.exp,
-      money: sub.money,
-      submittedBy: sub.username,
-      status: sub.status,
-      submittedAt: sub.created_at,
-      is_archived: sub.is_archived || false
-    }));
+    pendingSubmissions = (data || []).map(mapContributionRow);
     
     renderPendingApprovals();
   } catch (error) {
@@ -3723,8 +3729,7 @@ async function approveSubmission(id) {
           source: sub.source,
           summary: sub.summary,
           icon: sub.icon || "",
-          dropped_by: [],
-          created_by: sub.submittedBy
+          dropped_by: []
         }]);
       
       if (itemError) throw itemError;
@@ -3756,8 +3761,7 @@ async function approveSubmission(id) {
           summary: sub.summary,
           icon: sub.icon || "",
           floor: sub.floor,
-          dropped_by: [],
-          created_by: sub.submittedBy
+          dropped_by: []
         }]);
       
       if (armorError) throw armorError;
@@ -3790,8 +3794,7 @@ async function approveSubmission(id) {
           summary: sub.summary,
           icon: sub.icon || "",
           loot: [],
-          materials: [],
-          created_by: sub.submittedBy
+          materials: []
         }]);
       
       if (enemyError) throw enemyError;
@@ -3843,11 +3846,15 @@ async function archiveSubmission(id) {
   
   if (confirm(`Archive submission "${sub.name}"? You can unarchive it later from the Archive tab.`)) {
     try {
-      // Call the archive_submission SQL function
-      const { error } = await supabase.rpc('archive_submission', {
-        submission_id: id,
-        admin_username: currentUser
-      });
+      const { error } = await supabase
+        .from('wiki_contributions')
+        .update({
+          is_archived: true,
+          archived_by: currentUser,
+          archived_at: new Date().toISOString(),
+          status: 'archived'
+        })
+        .eq('id', id);
       
       if (error) throw error;
       
@@ -3873,10 +3880,15 @@ async function unarchiveSubmission(id) {
   }
   
   try {
-    // Call the unarchive_submission SQL function
-    const { error } = await supabase.rpc('unarchive_submission', {
-      submission_id: id
-    });
+    const { error } = await supabase
+      .from('wiki_contributions')
+      .update({
+        is_archived: false,
+        archived_by: null,
+        archived_at: null,
+        status: 'pending'
+      })
+      .eq('id', id);
     
     if (error) throw error;
     
@@ -3936,7 +3948,8 @@ async function loadArchivedSubmissions() {
     
     if (error) throw error;
     
-    renderArchivedSubmissions(data || []);
+  const mapped = (data || []).map(mapContributionRow);
+  renderArchivedSubmissions(mapped);
     
   } catch (error) {
     console.error('Error loading archived submissions:', error);
@@ -3955,7 +3968,7 @@ async function getArchivedSubmissions() {
       .eq('is_archived', true);
     
     if (error) throw error;
-    return data || [];
+    return (data || []).map(mapContributionRow);
     
   } catch (error) {
     console.error('Error getting archived submissions:', error);
@@ -3982,11 +3995,11 @@ function renderArchivedSubmissions(archived) {
   container.innerHTML = archived.map(sub => `
     <div class="submission-item archived">
       <div class="submission-content">
-        <div class="submission-title">${sub.name} <span class="badge">${sub.type}</span> <span class="badge">${sub.rarity || sub.enemy_type || ""}</span></div>
+        <div class="submission-title">${sub.name} <span class="badge">${sub.type}</span> <span class="badge">${sub.rarity || sub.enemyType || ""}</span></div>
         <div class="submission-meta">
-          Archived ${new Date(sub.archived_at).toLocaleDateString()} by ${sub.archived_by}
+          ${sub.archivedAt ? `Archived ${new Date(sub.archivedAt).toLocaleDateString()}${sub.archivedBy ? ` by ${sub.archivedBy}` : ""}` : "Archived date unknown"}
           <br>
-          <span style="font-size:11px;color:var(--muted);">Originally submitted ${new Date(sub.submitted_at).toLocaleDateString()} by ${sub.submitted_by}</span>
+          <span style="font-size:11px;color:var(--muted);">Originally submitted ${sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : "?"} by ${sub.submittedBy || "unknown"}</span>
         </div>
         <div class="small" style="margin-top:6px;color:var(--muted);">${sub.summary}</div>
       </div>
@@ -4028,6 +4041,10 @@ function showEditModal(submission) {
   
   if (!modal || !formContainer) return;
   
+  const enemyTypeValue = submission.enemyType || submission.enemy_type || 'mob';
+  const rarityValue = (submission.rarity || 'common').toLowerCase();
+  const slotValue = submission.slot || '';
+  
   // Generate form based on submission type
   let formHTML = `<h2>✏️ Edit ${submission.type}: ${submission.name}</h2>`;
   
@@ -4038,29 +4055,35 @@ function showEditModal(submission) {
         <input type="text" id="edit_name" value="${submission.name}" required>
       </div>
       <div class="form-group">
-        <label>Rarity *</label>
-        <select id="edit_rarity" required>
-          <option value="common" ${submission.rarity === 'common' ? 'selected' : ''}>Common</option>
-          <option value="uncommon" ${submission.rarity === 'uncommon' ? 'selected' : ''}>Uncommon</option>
-          <option value="rare" ${submission.rarity === 'rare' ? 'selected' : ''}>Rare</option>
-          <option value="legendary" ${submission.rarity === 'legendary' ? 'selected' : ''}>Legendary</option>
+        <label>Rarity</label>
+        <select id="edit_rarity">
+          <option value="common" ${rarityValue === 'common' ? 'selected' : ''}>Common</option>
+          <option value="uncommon" ${rarityValue === 'uncommon' ? 'selected' : ''}>Uncommon</option>
+          <option value="rare" ${rarityValue === 'rare' ? 'selected' : ''}>Rare</option>
+          <option value="epic" ${rarityValue === 'epic' ? 'selected' : ''}>Epic</option>
+          <option value="legendary" ${rarityValue === 'legendary' ? 'selected' : ''}>Legendary</option>
+          <option value="mythic" ${rarityValue === 'mythic' ? 'selected' : ''}>Mythic</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>DPS</label>
+        <input type="number" id="edit_dps" min="0" step="0.1" value="${submission.dps ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Level Requirement</label>
+        <input type="number" id="edit_level" min="0" value="${submission.levelReq ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Floor</label>
+        <input type="text" id="edit_floor" value="${submission.floor || ''}">
+      </div>
+      <div class="form-group">
+        <label>Source</label>
+        <input type="text" id="edit_source" value="${submission.source || ''}">
       </div>
       <div class="form-group">
         <label>Summary *</label>
         <textarea id="edit_summary" required>${submission.summary || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Lore</label>
-        <textarea id="edit_lore">${submission.lore || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Stats</label>
-        <textarea id="edit_stats">${submission.stats || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>How to Obtain</label>
-        <textarea id="edit_obtain">${submission.obtain || ''}</textarea>
       </div>
     `;
   } else if (submission.type === 'armor') {
@@ -4070,29 +4093,39 @@ function showEditModal(submission) {
         <input type="text" id="edit_name" value="${submission.name}" required>
       </div>
       <div class="form-group">
-        <label>Rarity *</label>
-        <select id="edit_rarity" required>
-          <option value="common" ${submission.rarity === 'common' ? 'selected' : ''}>Common</option>
-          <option value="uncommon" ${submission.rarity === 'uncommon' ? 'selected' : ''}>Uncommon</option>
-          <option value="rare" ${submission.rarity === 'rare' ? 'selected' : ''}>Rare</option>
-          <option value="legendary" ${submission.rarity === 'legendary' ? 'selected' : ''}>Legendary</option>
+        <label>Rarity</label>
+        <select id="edit_rarity">
+          <option value="common" ${rarityValue === 'common' ? 'selected' : ''}>Common</option>
+          <option value="uncommon" ${rarityValue === 'uncommon' ? 'selected' : ''}>Uncommon</option>
+          <option value="rare" ${rarityValue === 'rare' ? 'selected' : ''}>Rare</option>
+          <option value="epic" ${rarityValue === 'epic' ? 'selected' : ''}>Epic</option>
+          <option value="legendary" ${rarityValue === 'legendary' ? 'selected' : ''}>Legendary</option>
+          <option value="mythic" ${rarityValue === 'mythic' ? 'selected' : ''}>Mythic</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Slot</label>
+        <input type="text" id="edit_slot" value="${slotValue}">
+      </div>
+      <div class="form-group">
+        <label>HP</label>
+        <input type="number" id="edit_hp" min="0" step="0.1" value="${submission.hp ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Defense</label>
+        <input type="number" id="edit_defense" min="0" step="0.1" value="${submission.defense ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Level Requirement</label>
+        <input type="number" id="edit_level" min="0" value="${submission.levelReq ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Source</label>
+        <input type="text" id="edit_source" value="${submission.source || ''}">
       </div>
       <div class="form-group">
         <label>Summary *</label>
         <textarea id="edit_summary" required>${submission.summary || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Lore</label>
-        <textarea id="edit_lore">${submission.lore || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Defense Stats</label>
-        <textarea id="edit_defense">${submission.defense || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>How to Obtain</label>
-        <textarea id="edit_obtain">${submission.obtain || ''}</textarea>
       </div>
     `;
   } else if (submission.type === 'enemy') {
@@ -4102,33 +4135,37 @@ function showEditModal(submission) {
         <input type="text" id="edit_name" value="${submission.name}" required>
       </div>
       <div class="form-group">
-        <label>Enemy Type *</label>
-        <select id="edit_enemyType" required>
-          <option value="basic" ${(submission.enemyType || submission.enemy_type) === 'basic' ? 'selected' : ''}>Basic</option>
-          <option value="elite" ${(submission.enemyType || submission.enemy_type) === 'elite' ? 'selected' : ''}>Elite</option>
-          <option value="boss" ${(submission.enemyType || submission.enemy_type) === 'boss' ? 'selected' : ''}>Boss</option>
-          <option value="raid" ${(submission.enemyType || submission.enemy_type) === 'raid' ? 'selected' : ''}>Raid Boss</option>
+        <label>Enemy Type</label>
+        <select id="edit_enemyType">
+          <option value="mob" ${enemyTypeValue === 'mob' ? 'selected' : ''}>Mob</option>
+          <option value="elite" ${enemyTypeValue === 'elite' ? 'selected' : ''}>Elite</option>
+          <option value="boss" ${enemyTypeValue === 'boss' ? 'selected' : ''}>Boss</option>
+          <option value="raid" ${enemyTypeValue === 'raid' ? 'selected' : ''}>Raid</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>HP</label>
+        <input type="number" id="edit_hp" min="0" step="1" value="${submission.hp ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Defense</label>
+        <input type="text" id="edit_defense" value="${submission.defense || ''}">
+      </div>
+      <div class="form-group">
+        <label>Floor</label>
+        <input type="text" id="edit_floor" value="${submission.floor || ''}">
+      </div>
+      <div class="form-group">
+        <label>Experience</label>
+        <input type="number" id="edit_exp" min="0" step="1" value="${submission.exp ?? ''}">
+      </div>
+      <div class="form-group">
+        <label>Money</label>
+        <input type="number" id="edit_money" min="0" step="1" value="${submission.money ?? ''}">
       </div>
       <div class="form-group">
         <label>Summary *</label>
         <textarea id="edit_summary" required>${submission.summary || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Lore</label>
-        <textarea id="edit_lore">${submission.lore || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Stats & Abilities</label>
-        <textarea id="edit_stats">${submission.stats || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Location</label>
-        <textarea id="edit_location">${submission.location || ''}</textarea>
-      </div>
-      <div class="form-group">
-        <label>Drops</label>
-        <textarea id="edit_drops">${submission.drops || ''}</textarea>
       </div>
     `;
   }
@@ -4150,84 +4187,104 @@ async function saveEditedSubmission() {
   }
   
   const sub = currentEditingSubmission;
-  const changes = {};
-  
-  // Collect changes based on type
-  const name = $("#edit_name")?.value;
-  const summary = $("#edit_summary")?.value;
-  const lore = $("#edit_lore")?.value;
+  const name = $("#edit_name")?.value?.trim();
+  const summary = $("#edit_summary")?.value?.trim();
   
   if (!name || !summary) {
     showToast('Please fill in all required fields', 'error');
     return;
   }
   
-  // Build update object
   const updates = {
-    name,
+    item_name: name,
     summary,
-    lore: lore || null,
     updated_at: new Date().toISOString()
   };
+  const changes = {};
   
-  // Type-specific fields
-  if (sub.type === 'item') {
-    const rarity = $("#edit_rarity")?.value;
-    const stats = $("#edit_stats")?.value;
-    const obtain = $("#edit_obtain")?.value;
-    
-    updates.rarity = rarity;
-    updates.stats = stats || null;
-    updates.obtain = obtain || null;
-    
-    // Track changes
-    if (sub.name !== name) changes.name = { old: sub.name, new: name };
-    if (sub.rarity !== rarity) changes.rarity = { old: sub.rarity, new: rarity };
-    if (sub.summary !== summary) changes.summary = { old: sub.summary, new: summary };
-    if (sub.lore !== lore) changes.lore = { old: sub.lore, new: lore };
-    if (sub.stats !== stats) changes.stats = { old: sub.stats, new: stats };
-    if (sub.obtain !== obtain) changes.obtain = { old: sub.obtain, new: obtain };
-    
-  } else if (sub.type === 'armor') {
-    const rarity = $("#edit_rarity")?.value;
-    const defense = $("#edit_defense")?.value;
-    const obtain = $("#edit_obtain")?.value;
-    
-    updates.rarity = rarity;
-    updates.defense = defense || null;
-    updates.obtain = obtain || null;
-    
-    // Track changes
-    if (sub.name !== name) changes.name = { old: sub.name, new: name };
-    if (sub.rarity !== rarity) changes.rarity = { old: sub.rarity, new: rarity };
-    if (sub.summary !== summary) changes.summary = { old: sub.summary, new: summary };
-    if (sub.lore !== lore) changes.lore = { old: sub.lore, new: lore };
-    if (sub.defense !== defense) changes.defense = { old: sub.defense, new: defense };
-    if (sub.obtain !== obtain) changes.obtain = { old: sub.obtain, new: obtain };
-    
-  } else if (sub.type === 'enemy') {
-    const enemyType = $("#edit_enemyType")?.value;
-    const stats = $("#edit_stats")?.value;
-    const location = $("#edit_location")?.value;
-    const drops = $("#edit_drops")?.value;
-    
-    updates.enemy_type = enemyType;
-    updates.stats = stats || null;
-    updates.location = location || null;
-    updates.drops = drops || null;
-    
-    // Track changes
-    const oldEnemyType = sub.enemyType || sub.enemy_type;
-    if (sub.name !== name) changes.name = { old: sub.name, new: name };
-    if (oldEnemyType !== enemyType) changes.enemy_type = { old: oldEnemyType, new: enemyType };
-    if (sub.summary !== summary) changes.summary = { old: sub.summary, new: summary };
-    if (sub.lore !== lore) changes.lore = { old: sub.lore, new: lore };
-    if (sub.stats !== stats) changes.stats = { old: sub.stats, new: stats };
-    if (sub.location !== location) changes.location = { old: sub.location, new: location };
-    if (sub.drops !== drops) changes.drops = { old: sub.drops, new: drops };
+  if (sub.name !== name) {
+    changes.item_name = { old: sub.name, new: name };
+  }
+  if ((sub.summary || '').trim() !== summary) {
+    changes.summary = { old: sub.summary, new: summary };
   }
   
-  // Only update if there are changes
+  const toNumber = (val) => {
+    if (val === '' || val == null) return null;
+    const num = Number(val);
+    return Number.isFinite(num) ? num : null;
+  };
+  const toText = (val) => (val && val.trim() ? val.trim() : null);
+  
+  if (sub.type === 'item') {
+    const rarity = $("#edit_rarity")?.value || null;
+    const dps = toNumber($("#edit_dps")?.value ?? null);
+    const levelReq = toNumber($("#edit_level")?.value ?? null);
+    const floor = toText($("#edit_floor")?.value || '');
+    const source = toText($("#edit_source")?.value || '');
+    
+    updates.rarity = rarity;
+    updates.dps = dps;
+    updates.level_req = levelReq;
+    updates.floor = floor;
+    updates.source = source;
+    
+    if ((sub.rarity || null) !== rarity) changes.rarity = { old: sub.rarity, new: rarity };
+    if ((sub.dps ?? null) !== dps) changes.dps = { old: sub.dps, new: dps };
+    if ((sub.levelReq ?? null) !== levelReq) changes.level_req = { old: sub.levelReq, new: levelReq };
+    if ((sub.floor || null) !== floor) changes.floor = { old: sub.floor, new: floor };
+    if ((sub.source || null) !== source) changes.source = { old: sub.source, new: source };
+  } else if (sub.type === 'armor') {
+    const rarity = $("#edit_rarity")?.value || null;
+    const slot = toText($("#edit_slot")?.value || '');
+    const hp = toNumber($("#edit_hp")?.value ?? null);
+    const defense = toNumber($("#edit_defense")?.value ?? null);
+    const levelReq = toNumber($("#edit_level")?.value ?? null);
+    const source = toText($("#edit_source")?.value || '');
+    
+    updates.rarity = rarity;
+    updates.slot = slot;
+    updates.hp = hp;
+    updates.defense = defense;
+    updates.level_req = levelReq;
+    updates.source = source;
+    
+    if ((sub.rarity || null) !== rarity) changes.rarity = { old: sub.rarity, new: rarity };
+    if ((sub.slot || null) !== slot) changes.slot = { old: sub.slot, new: slot };
+    if ((sub.hp ?? null) !== hp) changes.hp = { old: sub.hp, new: hp };
+    if ((sub.defense ?? null) !== defense) changes.defense = { old: sub.defense, new: defense };
+    if ((sub.levelReq ?? null) !== levelReq) changes.level_req = { old: sub.levelReq, new: levelReq };
+    if ((sub.source || null) !== source) changes.source = { old: sub.source, new: source };
+  } else if (sub.type === 'enemy') {
+    const enemyType = $("#edit_enemyType")?.value || null;
+    const hp = toNumber($("#edit_hp")?.value ?? null);
+    const defense = toText($("#edit_defense")?.value || '');
+    const floor = toText($("#edit_floor")?.value || '');
+    const exp = toNumber($("#edit_exp")?.value ?? null);
+    const money = toNumber($("#edit_money")?.value ?? null);
+    
+    updates.enemy_type = enemyType;
+    updates.hp = hp;
+    updates.defense = defense;
+    updates.floor = floor;
+    updates.exp = exp;
+    updates.money = money;
+    
+    const prevEnemyType = sub.enemyType || sub.enemy_type || null;
+    if (prevEnemyType !== enemyType) changes.enemy_type = { old: prevEnemyType, new: enemyType };
+    if ((sub.hp ?? null) !== hp) changes.hp = { old: sub.hp, new: hp };
+    if ((sub.defense || null) !== defense) changes.defense = { old: sub.defense, new: defense };
+    if ((sub.floor || null) !== floor) changes.floor = { old: sub.floor, new: floor };
+    if ((sub.exp ?? null) !== exp) changes.exp = { old: sub.exp, new: exp };
+    if ((sub.money ?? null) !== money) changes.money = { old: sub.money, new: money };
+  }
+  
+  // Remove unchanged entries from changes object
+  Object.keys(changes).forEach((key) => {
+    const diff = changes[key];
+    if (diff.old === diff.new) delete changes[key];
+  });
+  
   if (Object.keys(changes).length === 0) {
     showToast('No changes detected', 'info');
     closeEditModal();
