@@ -265,7 +265,7 @@ async function loadWikiContent() {
     if (!enemiesError && dbEnemies) {
       const formattedEnemies = dbEnemies.map(enemy => ({
         name: enemy.name,
-        type: enemy.type,
+        type: enemy.enemy_type || enemy.type,
         floor: enemy.floor,
         icon: enemy.icon || "",
         hp: enemy.hp || 0,
@@ -3720,99 +3720,108 @@ async function approveSubmission(id) {
     if (sub.type === "item") {
       const { error: itemError } = await supabase
         .from('items')
-        .insert([{
+        .upsert({
           name: sub.name,
-          rarity: sub.rarity,
-          dps: sub.dps,
-          level_req: sub.levelReq,
-          floor: sub.floor,
-          source: sub.source,
-          summary: sub.summary,
+          rarity: sub.rarity || 'common',
+          dps: sub.dps ?? null,
+          level_req: sub.levelReq ?? null,
+          floor: sub.floor || null,
+          source: sub.source || null,
+          summary: sub.summary || null,
           icon: sub.icon || "",
-          dropped_by: []
-        }]);
+          dropped_by: sub.droppedBy || []
+        }, { onConflict: 'name' });
       
       if (itemError) throw itemError;
       
       // Add to local DB immediately
-      DB.items.push({
+      const existingIndex = DB.items.findIndex(i => i.name === sub.name);
+      const newItem = {
         name: sub.name,
-        rarity: sub.rarity,
-        dps: sub.dps,
-        levelReq: sub.levelReq,
-        floor: sub.floor,
-        source: sub.source,
-        summary: sub.summary,
+        rarity: sub.rarity || 'common',
+        dps: sub.dps ?? null,
+        levelReq: sub.levelReq ?? null,
+        floor: sub.floor || '',
+        source: sub.source || '',
+        summary: sub.summary || '',
         icon: sub.icon || "",
-        droppedBy: []
-      });
+        droppedBy: sub.droppedBy || []
+      };
+      if (existingIndex >= 0) DB.items[existingIndex] = newItem;
+      else DB.items.push(newItem);
       
     } else if (sub.type === "armor") {
       const { error: armorError } = await supabase
         .from('armor')
-        .insert([{
+        .upsert({
           name: sub.name,
-          rarity: sub.rarity,
-          slot: sub.slot,
-          hp: sub.hp,
-          defense: sub.defense,
-          level_req: sub.levelReq,
-          source: sub.source,
-          summary: sub.summary,
+          rarity: sub.rarity || 'common',
+          slot: sub.slot || null,
+          hp: sub.hp ?? null,
+          defense: sub.defense ?? null,
+          level_req: sub.levelReq ?? null,
+          source: sub.source || null,
+          summary: sub.summary || null,
           icon: sub.icon || "",
-          floor: sub.floor,
-          dropped_by: []
-        }]);
+          floor: sub.floor || null,
+          dropped_by: sub.droppedBy || []
+        }, { onConflict: 'name' });
       
       if (armorError) throw armorError;
       
       // Add to local DB immediately
-      DB.armor.push({
+      const existingIndex = DB.armor.findIndex(i => i.name === sub.name);
+      const newArmor = {
         name: sub.name,
-        rarity: sub.rarity,
-        slot: sub.slot,
-        hp: sub.hp,
-        defense: sub.defense,
-        levelReq: sub.levelReq,
-        source: sub.source,
-        summary: sub.summary,
+        rarity: sub.rarity || 'common',
+        slot: sub.slot || '',
+        hp: sub.hp ?? null,
+        defense: sub.defense ?? null,
+        levelReq: sub.levelReq ?? null,
+        source: sub.source || '',
+        summary: sub.summary || '',
         icon: sub.icon || "",
-        droppedBy: []
-      });
+        droppedBy: sub.droppedBy || []
+      };
+      if (existingIndex >= 0) DB.armor[existingIndex] = newArmor;
+      else DB.armor.push(newArmor);
       
     } else if (sub.type === "enemy") {
       const { error: enemyError } = await supabase
         .from('enemies')
-        .insert([{
+        .upsert({
           name: sub.name,
-          type: sub.enemyType,
-          hp: sub.hp,
-          defense: sub.defense,
-          floor: sub.floor,
-          exp: sub.exp,
-          money: sub.money,
-          summary: sub.summary,
+          enemy_type: sub.enemyType || 'mob',
+          hp: sub.hp ?? null,
+          defense: sub.defense || null,
+          floor: sub.floor || null,
+          exp: sub.exp ?? null,
+          money: sub.money ?? null,
+          summary: sub.summary || null,
           icon: sub.icon || "",
-          loot: [],
-          materials: []
-        }]);
+          loot: sub.loot || [],
+          materials: sub.materials || []
+        }, { onConflict: 'name' });
       
       if (enemyError) throw enemyError;
       
       // Add to local DB immediately
-      DB.enemies.push({
+      const existingIndex = DB.enemies.findIndex(i => i.name === sub.name);
+      const newEnemy = {
         name: sub.name,
-        type: sub.enemyType,
-        hp: sub.hp,
-        defense: sub.defense,
-        floor: sub.floor,
-        exp: sub.exp,
-        money: sub.money,
-        summary: sub.summary,
+        type: sub.enemyType || 'mob',
+        hp: sub.hp ?? null,
+        defense: sub.defense || '',
+        floor: sub.floor || '',
+        exp: sub.exp ?? null,
+        money: sub.money ?? null,
+        summary: sub.summary || '',
         icon: sub.icon || "",
-        loot: [],
-        materials: []
-      });
+        loot: sub.loot || [],
+        materials: sub.materials || []
+      };
+      if (existingIndex >= 0) DB.enemies[existingIndex] = newEnemy;
+      else DB.enemies.push(newEnemy);
     }
     
     // Update local submission status
@@ -3825,7 +3834,8 @@ async function approveSubmission(id) {
     showToast(`${sub.name} approved and added to wiki!`, "success");
     addNotification("Submission Approved", `Your ${sub.type} "${sub.name}" was approved!`, "✅", "success");
     
-    // Re-render wiki pages
+    // Reload fresh data so UI stays in sync with database
+    await loadWikiContent();
     render();
     
   } catch (error) {
