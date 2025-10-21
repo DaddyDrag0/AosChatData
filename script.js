@@ -4182,11 +4182,15 @@ function showEditModal(submission) {
   
   formContainer.innerHTML = formHTML;
   modal.hidden = false;
+  modal.style.display = "flex";
 }
 
 function closeEditModal() {
   const modal = $("#editModal");
-  if (modal) modal.hidden = true;
+  if (modal) {
+    modal.hidden = true;
+    modal.style.display = "none";
+  }
   currentEditingSubmission = null;
 }
 
@@ -4339,10 +4343,12 @@ async function saveEditedSubmission() {
 document.addEventListener('DOMContentLoaded', () => {
   const saveBtn = $("#saveEditBtn");
   const cancelBtn = $("#cancelEditBtn");
+  const closeBtn = $("#editModalClose");
   const modal = $("#editModal");
   
   if (saveBtn) saveBtn.addEventListener('click', saveEditedSubmission);
   if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
   
   // Close on backdrop click
   if (modal) {
