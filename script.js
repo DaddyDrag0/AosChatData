@@ -109,6 +109,17 @@ function isAdmin() {
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
+function escapeHtml(value) {
+  if (value == null) return "";
+  return value
+    .toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Toast notification system
 function showToast(message, type = 'info', duration = 4000) {
   const container = $("#toastContainer");
@@ -915,6 +926,9 @@ async function initWiki() {
   await loadMySubmissions();
   if (isAdmin()) {
     await loadPendingSubmissions();
+    await loadApprovedContent();
+  } else {
+    await loadApprovedContent();
   }
   
   // Always render the admin panel visibility (will hide if not admin)
@@ -3341,6 +3355,11 @@ function deleteBuild(id) {
 // ===== WIKI CONTRIBUTIONS =====
 let mySubmissions = [];
 let pendingSubmissions = [];
+const approvedContent = {
+  items: [],
+  armor: [],
+  enemies: []
+};
 
 function mapContributionRow(row) {
   return {
@@ -3661,6 +3680,8 @@ function renderPendingApprovals() {
   // Only show if user is owner/admin
   const hasAdminAccess = isAdmin();
   $("#adminPanel").hidden = !hasAdminAccess;
+  const approvedPanel = $("#approvedContentPanel");
+  if (approvedPanel) approvedPanel.hidden = !hasAdminAccess;
   
   // Show/hide archive nav link
   const archiveNavLink = $("#archiveNavLink");
@@ -3668,7 +3689,10 @@ function renderPendingApprovals() {
     archiveNavLink.style.display = hasAdminAccess ? "block" : "none";
   }
   
-  if (!hasAdminAccess) return;
+  if (!hasAdminAccess) {
+    renderApprovedContent();
+    return;
+  }
   
   const pending = pendingSubmissions.filter(s => s.status === "pending" && !s.is_archived);
   
@@ -3692,6 +3716,211 @@ function renderPendingApprovals() {
       </div>
     </div>
   `).join("");
+
+  renderApprovedContent();
+}
+
+async function loadApprovedContent() {
+  if (!supabase || !isAdmin()) {
+    approvedContent.items = [];
+    approvedContent.armor = [];
+    approvedContent.enemies = [];
+    renderApprovedContent();
+    return;
+  }
+
+  try {
+    const [itemsRes, armorRes, enemiesRes] = await Promise.all([
+      supabase.from('items').select('*').order('updated_at', { ascending: false }),
+      supabase.from('armor').select('*').order('updated_at', { ascending: false }),
+      supabase.from('enemies').select('*').order('updated_at', { ascending: false })
+    ]);
+
+    if (!itemsRes.error && Array.isArray(itemsRes.data)) {
+      approvedContent.items = itemsRes.data;
+    }
+    if (!armorRes.error && Array.isArray(armorRes.data)) {
+      approvedContent.armor = armorRes.data;
+    }
+    if (!enemiesRes.error && Array.isArray(enemiesRes.data)) {
+      approvedContent.enemies = enemiesRes.data;
+    }
+    renderApprovedContent();
+  } catch (error) {
+    console.error('Error loading approved content:', error);
+  }
+}
+
+function renderApprovedContent() {
+  const panel = $("#approvedContentPanel");
+  if (!panel) return;
+
+  const isVisible = isAdmin();
+  panel.hidden = !isVisible;
+  if (!isVisible) {
+    $("#approvedItemsList").innerHTML = '<div class="empty">No approved items yet</div>';
+    $("#approvedArmorList").innerHTML = '<div class="empty">No approved armor yet</div>';
+    $("#approvedEnemiesList").innerHTML = '<div class="empty">No approved enemies yet</div>';
+    return;
+  }
+
+  const renderList = (containerSelector, entries, type) => {
+    const container = $(containerSelector);
+    if (!container) return;
+    if (!entries || entries.length === 0) {
+      container.innerHTML = `<div class="empty">No approved ${type} yet</div>`;
+      return;
+    }
+
+    container.innerHTML = entries.map(entry => {
+      const updatedLabel = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : '—';
+      const rarityLabel = escapeHtml(entry.rarity || 'common');
+      const summary = escapeHtml(entry.summary || entry.description || '');
+      const floor = escapeHtml(entry.floor || '');
+      const dpsLabel = escapeHtml(entry.dps == null ? '-' : entry.dps);
+      const defenseLabel = escapeHtml(entry.defense == null ? '-' : entry.defense);
+      const slotLabel = escapeHtml(entry.slot || '-');
+      const enemyTypeLabel = escapeHtml(entry.enemy_type || entry.type || 'mob');
+      const typeLabel = type === 'items' ? 'item' : type === 'armor' ? 'armor' : 'enemy';
+      const encodedName = encodeURIComponent(entry.name);
+
+      let metaLine = '';
+      if (typeLabel === 'item') {
+        metaLine = `Rarity: ${rarityLabel} • DPS: ${dpsLabel} • Floor: ${floor || '—'}`;
+      } else if (typeLabel === 'armor') {
+        metaLine = `Rarity: ${rarityLabel} • Slot: ${slotLabel} • Defense: ${defenseLabel}`;
+      } else {
+        metaLine = `Type: ${enemyTypeLabel} • Floor: ${floor || '—'}`;
+      }
+
+      return `
+        <div class="submission-item approved">
+          <div class="submission-content">
+            <div class="submission-title">${escapeHtml(entry.name)} <span class="badge">${typeLabel}</span></div>
+            <div class="submission-meta">Updated ${escapeHtml(updatedLabel)}</div>
+            <div class="small" style="margin-top:6px;color:var(--muted);">${metaLine}</div>
+            ${summary ? `<div class="small" style="margin-top:6px;">${summary}</div>` : ''}
+          </div>
+          <div class="submission-actions">
+            <button class="btn ghost" onclick="archiveApprovedContent('${typeLabel}','${encodedName}')" style="padding:8px 12px;color:#f59e0b;">📦 Archive</button>
+            <button class="btn ghost" onclick="deleteApprovedContent('${typeLabel}','${encodedName}')" style="padding:8px 12px;color:#dc2626;">🗑 Remove</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  renderList('#approvedItemsList', approvedContent.items, 'items');
+  renderList('#approvedArmorList', approvedContent.armor, 'armor');
+  renderList('#approvedEnemiesList', approvedContent.enemies, 'enemies');
+}
+
+async function findLatestContribution(type, name) {
+  const { data, error } = await supabase
+    .from('wiki_contributions')
+    .select('id')
+    .eq('contribution_type', type)
+    .eq('item_name', name)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0]?.id || null;
+}
+
+function typeToTable(type) {
+  if (type === 'item') return 'items';
+  if (type === 'armor') return 'armor';
+  return 'enemies';
+}
+
+async function archiveApprovedContent(type, encodedName) {
+  if (!supabase || !isAdmin()) {
+    showToast('You do not have permission to archive', 'error');
+    return;
+  }
+
+  const name = decodeURIComponent(encodedName);
+  const tableName = typeToTable(type);
+
+  if (!name) {
+    showToast('Invalid entry', 'error');
+    return;
+  }
+
+  if (!confirm(`Archive approved ${type} "${name}"? This removes it from the live wiki but keeps the submission in the archive.`)) {
+    return;
+  }
+
+  try {
+    const { error: deleteError } = await supabase.from(tableName).delete().eq('name', name);
+    if (deleteError) throw deleteError;
+
+    const contributionId = await findLatestContribution(type, name);
+    if (contributionId) {
+      const { error: updateError } = await supabase
+        .from('wiki_contributions')
+        .update({
+          status: 'archived',
+          is_archived: true,
+          archived_by: currentUser,
+          archived_at: new Date().toISOString()
+        })
+        .eq('id', contributionId);
+      if (updateError) throw updateError;
+    }
+
+    showToast(`${name} archived`, 'info');
+    await loadApprovedContent();
+    await loadArchivedSubmissions();
+    await loadWikiContent();
+    render();
+  } catch (error) {
+    console.error('Error archiving approved content:', error);
+    showToast('Failed to archive content', 'error');
+  }
+}
+
+async function deleteApprovedContent(type, encodedName) {
+  if (!supabase || !isAdmin()) {
+    showToast('You do not have permission to delete', 'error');
+    return;
+  }
+
+  const name = decodeURIComponent(encodedName);
+  const tableName = typeToTable(type);
+
+  if (!name) {
+    showToast('Invalid entry', 'error');
+    return;
+  }
+
+  if (!confirm(`PERMANENTLY remove ${type} "${name}" from the wiki? This cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    const { error: deleteError } = await supabase.from(tableName).delete().eq('name', name);
+    if (deleteError) throw deleteError;
+
+    const contributionId = await findLatestContribution(type, name);
+    if (contributionId) {
+      const { error: removeError } = await supabase
+        .from('wiki_contributions')
+        .delete()
+        .eq('id', contributionId);
+      if (removeError) throw removeError;
+    }
+
+    showToast(`${name} removed from wiki`, 'info');
+    await loadApprovedContent();
+    await loadArchivedSubmissions();
+    await loadWikiContent();
+    render();
+  } catch (error) {
+    console.error('Error deleting approved content:', error);
+    showToast('Failed to remove content', 'error');
+  }
 }
 
 async function approveSubmission(id) {
@@ -3835,6 +4064,7 @@ async function approveSubmission(id) {
     addNotification("Submission Approved", `Your ${sub.type} "${sub.name}" was approved!`, "✅", "success");
     
     // Reload fresh data so UI stays in sync with database
+    await loadApprovedContent();
     await loadWikiContent();
     render();
     
